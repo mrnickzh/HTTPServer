@@ -1,0 +1,76 @@
+import socket, select
+
+class Dispatcher:
+    def __init__(self):
+        self.handlers = []
+
+    def get_handler(self, filter):
+        for func, data in self.handlers:
+            if data == filter:
+                return func
+        return None
+
+    def add_handler(self, func, filter):
+        self.handlers.append((func, filter))
+
+class Resolver:
+
+    def __init__(self, dispatcher):
+        self.dispatcher = dispatcher
+
+    def handle(self, data):
+        try:
+            type = data.split()[0]
+            path = data.split()[1]
+            headers = data.split("\r\n")[1:-2:]
+            payload = data.split("\r\n\r\n")[1].split("&")
+
+            func = self.dispatcher.get_handler({"type": type, "path": path})
+
+            if func:
+                argcount = func.__code__.co_argcount
+
+                if argcount == 0:
+                    return "HTTP/1.0 200 OK\n\n" + str(func())
+                if argcount == 1:
+                    return "HTTP/1.0 200 OK\n\n" + str(func(payload))
+                if argcount == 2:
+                    return "HTTP/1.0 200 OK\n\n" + str(func(payload, headers))
+                if argcount > 2:
+                    print("\u001b[33mToo much arguments, got\u001b[0m", argcount, "\u001b[31m when max is \u001b[0m2")
+            else:
+                return "HTTP/1.0 404 Not Found"
+        except Exception as e:
+            print("\u001b[31mException raised:\u001b[0m", e)
+            return "HTTP/1.0 500 Internal Server Error"
+
+    def polling(self, ip, port):
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((ip, port))
+        server.listen()
+        server.setblocking(False)
+
+        print("\u001b[35mServer started")
+        print("\u001b[35mIP address:\u001b[0m", f"{ip}:{port}")
+
+        rlist = [server]
+        while True:
+            readable, writable, errored = select.select(rlist, [], [])
+            for sock in readable:
+                if sock is server:
+                    client, address = server.accept()
+                    client.setblocking(False)
+                    rlist.append(client)
+                    ip, port = address
+                    print(f"\u001b[32mReceived request, IP: \u001b[0m{ip}:{port}")
+                else:
+                    message = sock.recv(1024).decode()
+                    ip, port = sock.getpeername()
+                    print(f"\u001b[34mData received\n\u001b[0m{message}\n\u001b[34mFrom \u001b[0m{ip}:{port}")
+                    sock.send(self.handle(message).encode())
+                    sock.close()
+                    rlist.remove(sock)
+
+
+
