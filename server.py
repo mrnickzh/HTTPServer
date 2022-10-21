@@ -1,4 +1,5 @@
-import socket, select
+import socket
+import select
 
 class Dispatcher:
     def __init__(self):
