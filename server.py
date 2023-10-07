@@ -28,19 +28,20 @@ class Resolver:
                 if len(received) < 1024:
                     break
             data = ''.join(chunks)
-            print(data)
             type = data.split()[0]
             path = data.split()[1]
             rawheaders = data.split("\r\n")[1:-2:]
             headers = {}
             for head in rawheaders:
                 head = head.split(": ")
-                headers[head[0]] = head[1]
+                if len(head) > 1:
+                    headers[head[0]] = head[1]
             rawpayload = data.split("\r\n\r\n")[1].split("&")
             payload = {}
             for load in rawpayload:
                 load = load.split("=")
-                payload[load[0]] = load[1]
+                if len(load) > 1:
+                    payload[load[0]] = load[1]
 
             func = self.dispatcher.get_handler({"type": type, "path": path})
 
